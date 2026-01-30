@@ -16,6 +16,7 @@ dependencies:
   - tensorboard
   - scikit-sparse
   - vtk
+  - ipykernel  
   - pip
   - pip:
       - scikit-fem

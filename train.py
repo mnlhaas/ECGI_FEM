@@ -9,7 +9,6 @@ from training.trainer import Trainer
 
 def main(device):
     # Set up directories for saving results
-
     config_path = 'training/config_train.json'
     config = json.load(open(config_path))
 

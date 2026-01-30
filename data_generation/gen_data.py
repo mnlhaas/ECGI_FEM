@@ -374,7 +374,7 @@ def main():
     
     gen = GenData(config)
     
-    # gen.gen_dataset()
+    gen.gen_dataset()
     gen.gen_fixed_data()
     gen.gen_csv()
     gen.gen_data_base_methods()

@@ -1,21 +1,8 @@
 {
     "exp_name": "MFoE",
-    "logging_info": {
-        "log_batch": 500,
-        "log_dir": "trained_models"
-    },
-    "precision": "double",
-    "model_params":{
-        "convex": false,
-        "groupsize": 4,
-        "lamb_init": 5.0,
-        "scaling": 0.01,
-        "eps_omega": -5.0,
-        "problem": "denoise",
-        "loss": "L2"
-    },
-    "l_op_params":{
+    "l_op_params": {
         "approx": false,
+        "eps_theta": -5.0,
         "lumped": false,
         "num_experts": [
             1,
@@ -27,9 +14,26 @@
             5,
             5,
             5
-        ],
-        "eps_theta": -5.0
+        ]
     },
+    "logging_info": {
+        "log_batch": 500,
+        "log_dir": "trained_models"
+    },
+    "model_params": {
+        "convex": false,
+        "eps_omega": -5.0,
+        "groupsize": 4,
+        "lamb_init": 5.0,
+        "loss": "L2",
+        "problem": "denoise",
+        "scaling": 0.01
+    },
+    "noise_range": [
+        0.0,
+        0.3
+    ],
+    "noise_val": 0.2,
     "optimization": {
         "fixed_point_solver_bw_params": {
             "max_iter": 25,
@@ -40,17 +44,16 @@
             "tol": 0.0001
         }
     },
+    "precision": "double",
+    "train_dataloader": {
+        "batch_size": 1
+    },
     "training_options": {
         "lr_activation": 0.005,
         "lr_conv": 0.005,
-        "lr_mu": 0.005,
         "lr_decay": 0.75,
+        "lr_mu": 0.005,
         "n_batch_decay": 2500,
         "n_batches": 20000
-    },
-    "noise_val": 0.2,
-    "noise_range": [0.0,0.3],
-    "train_dataloader": {
-        "batch_size": 1
     }
 }

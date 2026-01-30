@@ -1,4 +1,5 @@
 import json
+import os
 import numpy as np
 import meshio
 import pyvista as pv
@@ -244,106 +245,6 @@ class GenData:
             )
             plt.savefig(f"data/plots/extracellular_potential_{seed}.png", dpi=300)
             plt.close(fig)
-
-            
-            # from matplotlib.colors import ListedColormap, BoundaryNorm
-            # from scipy.interpolate import interp1d
-            # import matplotlib.pyplot as plt
-            # import pandas as pd
-            # from matplotlib.cm import ScalarMappable
-
-            # # --- Colormap ---
-            # lut_vals = 1024
-            # rgb = pd.read_csv("/home/haas/cardiac/inverse_problem_ECGi/src/demo_2D/colormap/coolwarm_extended.csv")
-            # rgba = np.concatenate([rgb.to_numpy()/255, np.ones([rgb.shape[0], 1])], axis=1)
-            # rgba_interp = interp1d(np.linspace(0, 1, num=rgba.shape[0]), rgba.T)(np.linspace(0, 1, num=lut_vals)).T
-            # cmap_new = ListedColormap(rgba_interp)
-
-            # # --- Plot setup ---
-            # tt = np.linspace(0, extra_fine.shape[1] - 1, 7).astype(int)
-            # tt_in = tt[1:-1]  # pick middle ones
-
-            # vmin, vmax = extra_fine.min(), extra_fine.max()
-            # n_levels = 24
-            # levels = np.linspace(vmin, vmax, n_levels + 1)
-            # norm = BoundaryNorm(levels, ncolors=cmap_new.N, clip=True)
-
-            # # --- Use GridSpec for axes + colorbar ---
-            # fig = plt.figure(figsize=(16, 3), dpi=300)
-            # gs = fig.add_gridspec(1, 6, width_ratios=[1,1,1,1,1,0.05], wspace=0.1)  # last column for colorbar
-
-            # axs = [fig.add_subplot(gs[0, i]) for i in range(5)]  # 5 plots
-            # cbar_ax = fig.add_subplot(gs[0, 5])  # colorbar
-
-            # # --- Plot each subplot ---
-            # for ax, i in zip(axs, tt_in):
-            #     t_val = i * time_sample * dt
-            #     ax.tricontourf(self.pts_fine[:, 0], self.pts_fine[:, 1], self.elm_fine, extra_fine[:, i],
-            #                 cmap=cmap_new, norm=norm, levels=levels, fraction=0.08)
-            #     ax.set_title(f"t = {t_val:.1f} ms", fontsize=10)
-            #     ax.axis('off')
-
-            # # --- Colorbar ---
-            # sm = ScalarMappable(cmap=cmap_new, norm=norm)
-            # sm.set_array([])
-            # fig.colorbar(sm, cax=cbar_ax, label='Extracellular potential [mV]', ticks=levels[::4])
-
-            # plt.tight_layout()
-            # plt.savefig(f"data/plots/extracellular_potential_{seed}.png")
-            # plt.close(fig)
-
-
-            
-            # from matplotlib.colors import LinearSegmentedColormap, ListedColormap, BoundaryNorm
-            # import matplotlib.pyplot as plt
-            # from scipy.interpolate import interp1d
-            # import pandas as pd
-
-            # lut_vals = 1024
-            # rgb = pd.read_csv("/home/haas/cardiac/inverse_problem_ECGi/src/demo_2D/colormap/coolwarm_extended.csv")
-            # rgba = np.concatenate([rgb.to_numpy()/255, np.ones([rgb.shape[0], 1])], axis=1)
-            # rgba_interp = interp1d(np.linspace(0, 1, num=rgba.shape[0]), rgba.T)(np.linspace(0, 1, num=lut_vals)).T
-            # cmap_new = ListedColormap(rgba_interp)
-            
-            # # select 2nd, 5th, and 8th from the linspace
-            # # u_hist_norm = (extra_fine - extra_fine.min())/ (extra_fine.max() - extra_fine.min())
-            
-            # tt = [40, 100, 160]  # numpy indexing: 0-based
-            # fig, axs = plt.subplots(1, 3, figsize=(9, 3), dpi=300)  # 1 row, 3 columns
-            # for ax, i in zip(axs.ravel(), tt):
-            #     print(f"Plotting frame index: {i}")
-            #     if i == 40:  # scar plot
-            #         scar_vals = np.zeros(len(self.elm_fine))
-            #         scar_vals[scar_mask_1] = 1
-            #         scar_vals[scar_mask_2] = 1
-            #         scar_cmap = ListedColormap(['lightgray', '#d62728'])
-            #         ax.tripcolor(
-            #             self.pts_fine[:, 0],
-            #             self.pts_fine[:, 1],
-            #             self.elm_fine,
-            #             facecolors=scar_vals,
-            #             cmap=scar_cmap
-            #         )
-
-            #     else:
-            #         # normal voltage plot
-            #         ax.tricontourf(
-            #             self.pts_fine[:, 0],
-            #             self.pts_fine[:, 1],
-            #             self.elm_fine,
-            #             extra_fine[:, i],
-            #             vmin=extra_fine.min(),
-            #             vmax=extra_fine.max(),
-            #             cmap=cmap_new,
-            #             levels=24
-            #         )
-
-            #     ax.axis('off')
-            # # fig.colorbar(contour, ax=axs.ravel(), orientation='vertical', label='Voltage [V]')
-            # plt.tight_layout()
-            # plt.savefig(f"data/plots/heartbeat_with_scar_{self.iteration}.png", dpi=300)
-            # plt.close(fig)
-            # np.save(f"data/plots/heartbeat_with_scar_{self.iteration}.npy", extra_coarse)
         
         return extra_coarse[self.epi_inds], time_sample*dt
     
@@ -377,6 +278,9 @@ class GenData:
             
     def gen_fixed_data(self):
         """Generate fixed FEM operators and matrices"""
+        
+        if not os.path.exists("data/data_fixed"):
+            os.makedirs("data/data_fixed")
         
         # Compute spatial mass matrix, inverse, and quadrature weights
         mass_matrix = mass.assemble(self.heart_surf_basis)[self.epi_inds][:, self.epi_inds].tocsc()
@@ -417,7 +321,6 @@ class GenData:
         
     def gen_data_base_methods(self):
         """Generate fixed FEM operators for baseline methods"""
-        
         # Compute interpolation operator to map function values of spatial gradient to nodes
         int_op_space = assemble_interpol_op_space(self.heart_surf_basis)
         
@@ -428,6 +331,10 @@ class GenData:
 
         
     def gen_csv(self):
+        """Generate csv files for data loader"""
+        if not os.path.exists("data/data_csv"):
+            os.makedirs("data/data_csv")
+            
         path = Path("data/data_functions")
         path_save = Path("data/data_csv")
         path_save.mkdir(parents=True, exist_ok=True) 
@@ -458,12 +365,18 @@ def main():
     with open("data_generation/config_data.json") as f:
         config = json.load(f)
 
+    if config["plot"]:
+        if not os.path.exists("data/plots"):
+            os.makedirs("data/plots")
+            
+    if not os.path.exists("data/data_functions"):
+            os.makedirs("data/data_functions")
+    
     gen = GenData(config)
     
-    gen.gen_dataset()
+    # gen.gen_dataset()
     gen.gen_fixed_data()
     gen.gen_csv()
-    
     gen.gen_data_base_methods()
 
 

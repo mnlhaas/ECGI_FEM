@@ -37,7 +37,6 @@ class FemConvolution(nn.Module):
         x_fem = torch.einsum('tkh, bih -> bikt', fem_matrices_K, x)
         x_out = torch.einsum('oik, bikt -> bot', weight, x_fem)
         return dt/6 * x_out
-                
             
     def trans(self, x, dt, fem_matrices):
         fem_matrices_K = fem_matrices[self.K]
@@ -45,46 +44,6 @@ class FemConvolution(nn.Module):
         x_fem_T = torch.einsum('oik, bot -> bikt', weight, x)
         x_T = torch.einsum('tkh, bikt -> bih', fem_matrices_K, x_fem_T)
         return dt/6 * x_T
-    
-    
-    # def conv(self, x, dt, fem_matrices):
-    #     fem_matrices_K = fem_matrices[self.K]
-    #     weight = self.conv_param.weight
-        
-    #     # bw, c, h = x.shape
-    #     # weight = self.conv_param.weight
-    #     # co, ci, k = weight.shape
-        
-    #     # x_out = torch.zeros((bw, co, h), device=weight.device, dtype=weight.dtype)
-    #     x_fem = torch.einsum('tkh, bih -> bikt', fem_matrices_K, x)
-    #     x_out = torch.einsum('oik, bikt -> bot', weight, x_fem)
-        
-    #     # for i in range(h):
-    #     #     conv_mat = fem_matrices_K[i]
-    #     #     x_flat = x.reshape(-1, h).T      
-    #     #     x_fem = torch.sparse.mm(conv_mat, x_flat).T.reshape(bw, c, k)      
-    #     #     x_out[:,:,i] = torch.einsum('bik, oik -> bo', x_fem, weight)
-            
-    #     return dt/6 * x_out
-                
-            
-    # def adjoint(self, x, dt, fem_matrices):
-    #     fem_matrices_K = fem_matrices[self.K]
-    
-    #     bw, co, h = x.shape
-    #     weight = self.conv_param.weight
-    #     co, ci, k = weight.shape
-        
-    #     x_out = torch.zeros((bw, ci, h), device=x.device, dtype=x.dtype)
-        
-    #     for i in range(h):
-    #         conv_mat = fem_matrices_K[i] 
-    #         x_fem = torch.einsum('bo, oik -> bik', x[:,:,i], weight) 
-    #         x_flat = x_fem.reshape(bw*ci, k).T
-    #         x_flat = torch.sparse.mm(conv_mat.T, x_flat)
-    #         x_out += x_flat.T.reshape(bw, ci, h)
-            
-    #     return dt / 6 * x_out
             
     def conv_approx(self, x, dt, fem_matrices=None):
         weight = self.conv_param.weight
@@ -269,13 +228,6 @@ class L_Operator(nn.Module):
         for _, K in enumerate(unique_kernel_size):
             fem_matrices_for_K = [assem_fem_matrix(K, S, i, device).to(dtype=dtype) for i in range(S)]
             self.fem_matrices[K] = torch.stack(fem_matrices_for_K, dim=0)
-    
-    # def _precompute_fem_matrix(self, S, device, dtype):
-    #     self.fem_matrices = {}
-    #     unique_kernel_size = list(dict.fromkeys(self.size_kernels))
-    #     for _, K in enumerate(unique_kernel_size):
-    #         fem_matrices_for_K = [self._fem_conv_matrix(K, S, i, device).to(dtype=dtype) for i in range(S)]
-    #         self.fem_matrices[K] = fem_matrices_for_K
 
     def get_filters(self, proj_p1, Ks, dt, d):
         """Plot temporal filters at their nodes"""

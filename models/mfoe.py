@@ -135,19 +135,6 @@ class MFoE_temp(torch.nn.Module):
     def grad_cost(self, x, sigma, proj_p1, Ks, M, M_inv, D, D_inv, dt):
         Lx = self.l_op(x, proj_p1, Ks, dt, self.d)
         
-        # x = torch.rand_like(x)
-        # Lx = self.l_op(x, proj_p1, Ks, dt, self.d)
-        # y = torch.rand_like(Lx)
-        # Ly = self.l_op.adjoint(y, proj_p1, Ks, M, M_inv, D, D_inv, dt)
-        
-        # def scalar(u, v, M, D, Ks=None, Kt=None, dx=None, dt=None):
-        #     diff = u
-        #     tmp = torch.einsum('...ij,...ki->...kj', diff, M)
-        #     tmp = torch.einsum('...ij,...kj->...ik', tmp, D)
-        #     return torch.sqrt(torch.sum(v * tmp))
-        
-        # print(scalar(x,Ly, M, D) - scalar(y,Lx, M, D))
-        
         # Applying nonlinearity
         scaling = self.get_scaling(sigma)
         Lx = Lx / scaling

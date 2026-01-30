@@ -1,0 +1,23 @@
+name: temporal_foe
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.8
+  - pytorch
+  - pytorch-cuda=11.8
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - tqdm
+  - tensorboard
+  - scikit-sparse
+  - pip
+  - pip:
+      - scikit-fem
+      - meshio
+      - pyvista
+      - cupy-cuda11x

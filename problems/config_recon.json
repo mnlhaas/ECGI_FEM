@@ -1,0 +1,26 @@
+{
+"logging_info": {
+    "log_dir": "problems/inverse/",
+    "exp_name": "inverse_MFoE_convex_final_2e-2/"
+    },
+"regularizer": "MFoE",
+"method": {
+    "problem": "inverse",
+    "reg": "MFoE_convex_final",
+    "norm": "l2",
+    "precision": "double",
+    "lumped": false,
+    "max_iter": 10000,
+    "loss": "L2"
+},
+"params": {
+    "lambda": 0.1,
+    "sigma": 0.01,
+    "gamma": 4.0,
+    "log_search_coarse": false
+},
+"noise_val": 0.02,
+"tune": true,
+"log": true,
+"save_gt_data": false
+}

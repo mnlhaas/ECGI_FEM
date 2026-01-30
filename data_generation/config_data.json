@@ -1,0 +1,35 @@
+{
+"bidomain_cond":{
+  "sigma_il": [2.0,4.0],
+  "lamb_LT": [2.16,2.84],
+  "eps": [0.58,0.93],
+  "alpha": [0.1,0.91]
+},
+"stimulation":{
+  "Imax": 100.0,     
+  "Idur": 1.2     
+},
+"membrane":{
+  "Cm": 1.0,          
+  "beta": 800.0
+},
+"scar":{
+  "prob": 0.33,
+  "prob_second": 0.5,
+  "rad": [0.2,0.8],
+  "cond_factor": [0.05,0.25]
+},
+"time":{
+  "Tend": 160.0,
+  "dt_range": [0.08,0.12],
+  "sample_range": [7,13]
+},
+"ionic_model":{
+  "Vrest": -85.0,
+  "Vdep": 30.0,
+  "Vthre": -55.0,
+  "gmax": 1.4e-3
+},
+"data_nb": 1000,
+"plot": true
+}

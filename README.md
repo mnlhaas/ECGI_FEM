@@ -13,7 +13,7 @@ The project includes a complete pipeline for:
 ## Features
 
 *   **Synthetic Data Generation**: Simulates cardiac electrical activity using a monodomain model with Nagumo ionic dynamics on 2D meshes.
-*   **Deep Learning Model**: Implements a space-time Field of Experts model using PyTorch, incorporating FEM operators (Mass, Stiffness matrices) directly into the network architecture.
+*   **Deep Learning Model**: Implements a space-time multivariateField of Experts model based on [Ducotterd et al. (2025)](https://arxiv.org/pdf/2508.06490?) using PyTorch, incorporating FEM operators (Mass, Gradient) directly into the network architecture.
 *   **Baseline Methods**: Includes GPU-accelerated implementations (via CuPy) of classical regularization techniques:
     *   (`zero`)- and (`first`)-order Tikhonov (`TIK`) Regularization solved using the conjugate gradient method.
     *   Anisotropic (`l1`) and isotropic (`l2`) Total Variation (`TV`) using Primal-Dual Hybrid Gradient algorithms. The space-time TV implementation is based on the work of [Haas et al. (2025)](https://doi.org/10.1137/24M1685055).

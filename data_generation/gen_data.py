@@ -278,7 +278,6 @@ class GenData:
             
     def gen_fixed_data(self):
         """Generate fixed FEM operators and matrices"""
-        
         if not os.path.exists("data/data_fixed"):
             os.makedirs("data/data_fixed")
         

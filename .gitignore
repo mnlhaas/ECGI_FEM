@@ -1,0 +1,8 @@
+bin/
+**/data/data_functions/
+**/data/data_fixed/
+**/data/data_csv/
+**/data/plots/
+**/__pycache__/
+**/data_sets*
+**/*tar.gz

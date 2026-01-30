@@ -9,7 +9,7 @@ This directory contains the PyTorch implementations of the **Temporal Multivaria
 *   **`mfoe.py`**: Contains the main model class `MFoE_temp`. This defines the variational network architecture which unrolls an optimization algorithm (like Gradient Descent) where the regularization functional is learned.
 *   **`l_operator.py`**: Implements the learned linear operators ($L_i$) used within the MFoE regularization term.
     *   **`FemConvolution`**: A custom layer that performs temporal convolution combined with spatial FEM operations.
-    *   **`L_Operator`**: Aggregates spatial gradients (via Stiffness matrix $K_s$), temporal convolutions, and identity terms to form the feature maps. It includes spectral normalization to ensure stability.
+    *   **`L_Operator`**: Aggregates spatial gradients, temporal convolutions, and identity terms to form the feature maps. It includes spectral normalization to ensure stability.
 
 ### 2. Optimization & Loss Functions
 

@@ -1,13 +1,13 @@
 {
 "logging_info": {
     "log_dir": "problems/inverse/",
-    "exp_name": "inverse_MFoE_convex_final_2e-2/"
+    "exp_name": "inverse_MFoE_2e-2/"
     },
 "regularizer": "MFoE",
 "method": {
     "problem": "inverse",
-    "reg": "MFoE_convex_final",
-    "norm": "l2",
+    "reg": "MFoE",
+    "norm": ".",
     "precision": "double",
     "lumped": false,
     "max_iter": 10000,

@@ -42,7 +42,7 @@ The script populates the `data/` directory (created in the project root) with th
 
 *   `data/data_functions/`: Contains individual simulation samples (`.npz` files) with ground truth potentials (`u`) and time steps (`dt`).
 *   `data/data_fixed/`: Contains precomputed operators:
-    *   `fixed_data.npz`: Mass matrix (`M`), Stiffness matrix (`Ks`), Forward operator (`A`), etc.
+    *   `fixed_data.npz`: Mass matrix (`M`), spatial gradient matrix (`Ks`), forward operator (`A`), etc.
     *   `fixed_data_base.npz`: Operators specific to baseline methods.
 *   `data/data_csv/`: Contains `train.csv`, `test.csv`, and `val.csv` listing the filenames for each split.
 *   `data/plots/`: (Optional) Visualization of generated samples if `plot` is enabled in config.

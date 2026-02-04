@@ -46,10 +46,10 @@
         "lr_mu": 0.005,
         "lr_decay": 0.75,
         "n_batch_decay": 2500,
-        "n_batches": 20000
+        "n_batches": 10000
     },
     "noise_val": 0.2,
-    "noise_range": [0.0,0.3],
+    "noise_range": [0.0,0.6],
     "train_dataloader": {
         "batch_size": 1
     }

@@ -1,6 +1,6 @@
 # LEARNED FEM REGULARIZATION FOR ECGI
 
-This repository contains the implementation of a **Temporal Multivariate Fields-of-Experts** model designed for solving space-time inverse problems, with a specific application to **Electrocardiographic Imaging (ECGI)** on a 2D torso-heart-model with lungs.
+The repository contains the implementation of a **Finite Element-based Multivariate Fields-of-Experts** model designed for solving space-time inverse problems, with a specific application to **Electrocardiographic Imaging (ECGI)** on a 2D torso-heart-model with lungs.
 <p align="center">
   <img src="data_generation/figures/torso.png" alt="Torso-heart-model with lungs and electrodes" width="400"/>
 </p>

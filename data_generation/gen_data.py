@@ -134,9 +134,9 @@ class GenData:
         # Conductivities (intra- and extracellular)
         lamb_LT = np.random.uniform(self.config["bidomain_cond"]["lamb_LT"][0], self.config["bidomain_cond"]["lamb_LT"][1])
         eps = np.random.uniform(self.config["bidomain_cond"]["eps"][0], self.config["bidomain_cond"]["eps"][1])
-        alpha = np.random.uniform(self.config["bidomain_cond"]["alpha"][0], self.config["bidomain_cond"]["alpha"][1]) 
 
-        sigma_il = np.random.uniform(self.config["bidomain_cond"]["sigma_il"][0], self.config["bidomain_cond"]["sigma_il"][1]) 
+        alpha = self.config["bidomain_cond"]["alpha"]
+        sigma_il = self.config["bidomain_cond"]["sigma_il"]
         
         sigma_it = sigma_il*(1/lamb_LT)**2*((1+alpha*(1-eps))/(1+alpha))
         sigma_el = sigma_il*1/alpha

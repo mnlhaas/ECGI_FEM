@@ -78,6 +78,7 @@ def build_model(config):
 
 def normalize(func):
     return (func - func.min())/ (func.max() - func.min())
+
 class dataset_ecgi(Dataset):
     """Mesh function denoising data set."""
     def __init__(self, csv_dir):

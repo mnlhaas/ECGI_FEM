@@ -103,12 +103,13 @@ temporal_foe/
 ├── problems/               # PyTorch model definitions
 │   ├── config_recon.json   # Reconstruction parameters
 │   ├── plot.ipynb          # Visualization notebook
-│   ├── reconstruct.py      # Inference and comparison script
 │   └── utils_recon.py      # Reconstruction utilities
 ├── trained_models/         # Checkpoints of trained models
 ├── training/               # Training of MFoE model
 │   ├── config.json         # Training configuration
-│   ├── train.py            # Training entry point
 │   └── trainer.py          # Training loop and validation
+├── plot.ipynb              # Visualization notebook
+├── reconstruct.py          # Inference and comparison script
+├── train.py                # Training entry point
 └── utils.py                # General utilities (loading, noise, dataset)
 ```

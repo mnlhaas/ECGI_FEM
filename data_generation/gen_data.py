@@ -118,7 +118,7 @@ class GenData:
             import pandas as pd
 
             lut_vals = 1024
-            rgb = pd.read_csv("/home/haas/cardiac/inverse_problem_ECGi/src/demo_2D/colormap/coolwarm_extended.csv")
+            rgb = pd.read_csv("data/colormap/coolwarm_extended.csv/coolwarm_extended.csv")
             rgba = np.concatenate([rgb.to_numpy()/255, np.ones([rgb.shape[0], 1])], axis=1)
             rgba_interp = interp1d(np.linspace(0, 1, num=rgba.shape[0]), rgba.T)(np.linspace(0, 1, num=lut_vals)).T
             self.cmap_new = ListedColormap(rgba_interp)

@@ -21,6 +21,6 @@
 },
 "noise_val": 0.02,
 "tune": true,
-"log": true,
+"log": false,
 "save_gt_data": false
 }

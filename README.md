@@ -56,7 +56,7 @@ This script performs the following:
 To train the MFoE model run:
 
 ```bash
-python training/train.py --device cpu or cuda:n
+python train.py --device cpu or cuda:n
 ```
 
 **Key Configuration Options (`training/config_train.json`):**
@@ -76,7 +76,7 @@ tensorboard --logdir logs/
 To evaluate the trained model or run baseline reconstruction methods:
 
 ```bash
-python problems/reconstruct.py --device cuda:n (or cpu for MFoE)
+python reconstruct.py --device cuda:n (or cpu for MFoE)
 ```
 
 **Key Configuration Options (`problems/config_recon.json`):**

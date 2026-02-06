@@ -125,7 +125,7 @@ class GenData:
 
     def fion(self, vm):
         """Nagumo ionic current model"""
-        return (vm - self.Vdep)*(vm - self.Vrest)*(vm - self.Vthre)*self.gmax
+        return (vm - self.Vrest)*(vm -self.Vthre)*(vm - self.Vdep)*self.gmax
 
     def gen_sample(self, seed):
         """Generate one simulation sample of cardiac potentials"""

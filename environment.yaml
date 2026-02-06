@@ -22,5 +22,5 @@ dependencies:
       - scikit-fem
       - meshio
       - pyvista
-      - cupy
+      - cupy-cuda11x
       - torchdeq

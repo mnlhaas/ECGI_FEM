@@ -87,7 +87,7 @@ class dataset_ecgi(Dataset):
             csv_dir (string): Path to the csv data set descirption file.
         """
 
-        data_set_csv = pd.read_csv(csv_dir)
+        data_set_csv = pd.read_csv(csv_dir, header=None)
         data_set_np = data_set_csv.to_numpy().squeeze()
         
         self.root_dir = "data/data_functions/"

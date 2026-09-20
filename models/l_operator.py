@@ -69,8 +69,8 @@ class FemConvolution(nn.Module):
         return F.conv_transpose1d(x_new, weight, bias=None, dilation=self.conv_param.dilation, padding=self.conv_param.padding, groups=self.conv_param.groups, stride=self.conv_param.stride)
 
 class L_Operator(nn.Module):
-    def __init__(self, num_experts, size_kernels, eps_theta, lumped=False, approx=False):
-        """" 
+    def __init__(self, num_experts, size_kernels, eps_theta, lumped=False, approx=False, spectral_norm_tol=1e-4):
+        """"
         Compute the linear operators L_i = (\epsilon u, \nabla_x u, k_i \ast_T u)
         """
         super().__init__()
@@ -79,6 +79,7 @@ class L_Operator(nn.Module):
         self.approx = approx
         self.size_kernels = size_kernels
         self.num_experts = num_experts
+        self.spectral_norm_tol = spectral_norm_tol
 
         # list of convolutionnal layers
         self.conv_layers = nn.ModuleList()
@@ -97,17 +98,18 @@ class L_Operator(nn.Module):
 
     def forward(self, x, proj_p1, Ks, dt, d):
         b, c, w, h = x.shape
-        x = x / torch.sqrt(self.L) 
-        
+        assert b == 1 and c == 1, "sparse Ks matmul below assumes batch_size=1, single channel"
+        x = x / torch.sqrt(self.L)
+
         #Compute temporal convolution
         x_time = x.permute(0, 2, 1, 3).reshape(b * w, c, h)
         for conv in self.conv_layers:
             x_time = conv.convolution(x_time, dt, self.fem_matrices)
-                
+
         x_time = x_time.reshape(b, w, self.num_experts[-1], -1).permute(0, 2, 1, 3)
-        
+
         #Compute spatial gradient
-        x_space = (Ks@x).reshape([1,1,-1,d,h])
+        x_space = torch.sparse.mm(Ks, x.reshape(w, h)).reshape([1, 1, -1, d, h])
         x_space_int = torch.einsum('bckn,bcndt->bckdt', proj_p1, x_space).permute(dims=(0,3,1,2,4))
         
         #Interpolate all to the same space
@@ -133,18 +135,20 @@ class L_Operator(nn.Module):
         
         #Compute spatial gradient
         x_space = x_space.permute(dims=(0,2,3,1,4))
-        x_space = torch.einsum('bckn,bckdt->bcndt', proj_p1, x_space).reshape([1,1,-1,h])
-        x_space = torch.permute(Ks, (0,1,3,2))@x_space
+        x_space = torch.einsum('bckn,bckdt->bcndt', proj_p1, x_space).reshape([-1, h])
+        x_space = torch.sparse.mm(Ks.t(), x_space).reshape([1, 1, -1, h])
         
         #Summarize all dimensions
         x = self.eps_theta.exp()*x_plain + M_inv@x_space + torch.einsum('bckt,bcnt->bcnk', D_inv, x_time)
 
         return x
 
-    def spectral_norm(self, space_nodes, time_steps, proj_p1, Ks, M, M_inv, D, D_inv, dt, d, n_steps=500, tol=1e-4):
-        """ 
-        Compute the spectral norm of the linear operators with the power method for n_steps steps
+    def spectral_norm(self, space_nodes, time_steps, proj_p1, Ks, M, M_inv, D, D_inv, dt, d, n_steps=500, tol=None):
         """
+        Compute the spectral norm of the linear operators with the power method for n_steps steps.
+        """
+        if tol is None:
+            tol = self.spectral_norm_tol
         self.L = torch.tensor(1., device=self.conv_layers[0].conv_param.weight.device)
         u = torch.empty((1, 1, space_nodes, time_steps), device= self.conv_layers[0].conv_param.weight.device, dtype=Ks.dtype).normal_()
         with torch.no_grad():

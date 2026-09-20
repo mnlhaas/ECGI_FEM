@@ -32,13 +32,30 @@ def add_Gaussian_noise_dB_cp(u, db):
     noisy = u + noise_std*noise
     return noisy
 
-def load_model(name, device='cuda:0', epoch=None, reg=None):
+def add_Gaussian_noise_dB_np(u, db, seed):
+    """ Generate noisy observations with SNR in dB using a seeded NumPy RNG."""
+    avg_db_in = 10 ** (db / 10)
+    u_var = np.mean(u**2)
+
+    noise_std = np.sqrt(u_var/avg_db_in)
+    rng = np.random.default_rng(seed)
+    noise = rng.standard_normal(u.shape)
+
+    return u + noise_std*noise
+
+def add_Gaussian_noise_np(u, noise_val, seed):
+    """ Generate noisy (denoising-task) observations via a seeded NumPy RNG.. """
+    rng = np.random.default_rng(seed)
+    noise = rng.standard_normal(u.shape)
+    return u + noise_val*noise
+
+def load_model(name, device='cuda:0', epoch=None, reg=None, dim='2D'):
     """ Load model from a checkpoint.
     (Copyright (c) 2025 Stanislas Ducotterd) """
-    script_path = Path(__file__).resolve()  
+    script_path = Path(__file__).resolve()
     project_root = script_path.parent  #
-    trained_models_path = project_root / "trained_models"
-    
+    trained_models_path = project_root / "trained_models" / dim
+
     directory = f'{trained_models_path}/{name}/'
     directory_checkpoints = f'{directory}checkpoints/'
 
@@ -53,9 +70,8 @@ def load_model(name, device='cuda:0', epoch=None, reg=None):
     
     # config file
     config = json.load(open(f'{directory}config.json'.replace("[[]","[").replace("[]]","]")))
-   
     config['model_params']['problem'] = reg
-   
+    
     # build model
     model, _ = build_model(config)
     checkpoint = torch.load(checkpoint_path, map_location={'cuda:0':device,'cuda:1':device,'cuda:2':device,'cuda:3':device})
@@ -65,9 +81,7 @@ def load_model(name, device='cuda:0', epoch=None, reg=None):
     return model
 
 def build_model(config):
-    model = MFoE_temp(model_params=config['model_params'], l_op_params=config['l_op_params'],
-                          fw_param=config['optimization']['fixed_point_solver_fw_params'],
-                          bw_param=config['optimization']['fixed_point_solver_bw_params'])
+    model = MFoE_temp(model_params=config['model_params'], l_op_params=config['l_op_params'],fw_param=config['optimization']['fixed_point_solver_fw_params'],bw_param=config['optimization']['fixed_point_solver_bw_params'])
     
     if config['precision'] == 'float':
         model = model.float()
@@ -76,34 +90,44 @@ def build_model(config):
     
     return model, config
 
-def normalize(func):
-    return (func - func.min())/ (func.max() - func.min())
+def normalize(func, vmin=None, vmax=None):
+    """Min-max normalize to [0,1]"""
+    if vmin is None:
+        vmin = func.min()
+    if vmax is None:
+        vmax = func.max()
+    return (func - vmin) / (vmax - vmin)
 
 class dataset_ecgi(Dataset):
     """Mesh function denoising data set."""
     def __init__(self, csv_dir):
         """
         Args:
-            csv_dir (string): Path to the csv data set descirption file.
+            csv_dir (string): Path to the csv data set descirption file,
+                e.g. "data/2D/data_csv/train.csv" or "data/3D/data_csv/train.csv".
         """
 
         data_set_csv = pd.read_csv(csv_dir, header=None)
-        data_set_np = data_set_csv.to_numpy().squeeze()
-        
-        self.root_dir = "data/data_functions/"
+        data_set_np = data_set_csv.to_numpy().squeeze(axis=1)
+
+        data_root = Path(csv_dir).parent.parent
+        self.root_dir = str(data_root / "data_functions") + "/"
+
+        norm = np.load(data_root / "data_fixed" / "normalization.npz")
+        self.u_min, self.u_max = float(norm["u_min"]), float(norm["u_max"])
 
         self.data_set = []
         for i in tqdm(range(len(data_set_np)), ncols=80):
             self.data_set.append(self.load_all(data_set_np[i]))
-            
+
     def load_all(self, name):
         # Load all Information
         func_name = os.path.join(self.root_dir, name)
         data = np.load(func_name)
-        func_target = torch.from_numpy(normalize(data["u"]))
-        return [func_target, data["dt"]]
+        func_target = torch.from_numpy(normalize(data["u"], self.u_min, self.u_max))
+        sample = [func_target, data["dt"]]
+        sample.append(torch.from_numpy(normalize(data["u_fine"], self.u_min, self.u_max)))
+        return sample
 
     def __len__(self):
-        return len(self.data_set) 
-    
-
+        return len(self.data_set)

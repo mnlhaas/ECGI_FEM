@@ -15,12 +15,13 @@ class MFoE_temp(torch.nn.Module):
     """
     def __init__(self, model_params, l_op_params, fw_param, bw_param):
         super(MFoE_temp, self).__init__()
-        if model_params['problem'] == 'denoise':
+        self.problem = model_params['problem']
+        if self.problem == 'denoise':
             self.reconstruct = self.reconstruct_denoise
-            
-        elif model_params['problem'] == 'inverse':
+
+        elif self.problem == 'inverse':
             self.reconstruct = self.reconstruct_inverse
-            
+
         self.l_op = L_Operator(**l_op_params) 
         self.nb_groups = l_op_params['num_experts'][-1]
         self.groupsize = model_params['groupsize']
@@ -39,6 +40,8 @@ class MFoE_temp(torch.nn.Module):
         self.param_fw = fw_param
         self.param_bw = bw_param
 
+        self.denoise_init_value = model_params.get('denoise_init_value', None)
+
         self.num_params = sum(p.numel() for p in self.parameters())
 
         # Parameters to cache
@@ -55,19 +58,25 @@ class MFoE_temp(torch.nn.Module):
             self.l_op.precompute_fem_matrix(time_steps, x_noisy.device, x_noisy.dtype)
         self.l_op.spectral_norm(space_nodes, time_steps, proj_p1, Ks, M, M_inv, D, D_inv, dt, self.d)
 
+        if self.problem == 'inverse':
+            x_init = x_noisy.new_zeros(x_noisy.shape[0], x_noisy.shape[1], space_nodes, time_steps)
+        elif self.denoise_init_value is not None:
+            x_init = torch.full_like(x_noisy, self.denoise_init_value)
+        else:
+            x_init = x_noisy
+
         # fixed point iteration
         def f(x):
             return x - self.reconstruct(x, x_noisy, sigma, proj_p1, Ks, M, M_inv, D, D_inv, dt, A, L_data_fid)[0]
 
         def f_solver(deq_func, x0, max_iter, tol, stop_mode, **solver_kwargs):
-            z, self.fw_niter_max, self.fw_niter_mean = AGDR(x0.view(x_noisy.shape), x0.view(x_noisy.shape), proj_p1, Ks, M, M_inv, D, D_inv, dt, A, L_data_fid, self, sigma, **self.param_fw)
+            z, self.fw_niter_max, self.fw_niter_mean = AGDR(x0.view(x_init.shape), x_noisy, proj_p1, Ks, M, M_inv, D, D_inv, dt, A, L_data_fid, self, sigma, **self.param_fw)
             return z.view(x0.shape), [], []
 
-        deq = get_deq(f_max_iter=self.param_fw['max_iter'], f_tol=self.param_fw['tol'], b_solver='broyden',
-                      b_max_iter=self.param_bw['max_iter'], b_tol=self.param_bw['tol'], ift=True, kwargs={'ls': True})
+        deq = get_deq(f_max_iter=self.param_fw['max_iter'], f_tol=self.param_fw['tol'], b_solver='broyden', b_max_iter=self.param_bw['max_iter'], b_tol=self.param_bw['tol'], ift=True, kwargs={'ls': True})
 
         deq.f_solver = f_solver
-        z = deq(f, x_noisy)[0][-1]
+        z = deq(f, x_init)[0][-1]
 
         return z
     
@@ -155,7 +164,8 @@ class MFoE_temp(torch.nn.Module):
         return grad, cost
     
     def reconstruct_inverse(self, x, x_noisy, sigma, proj_p1, Ks, M, M_inv, D, D_inv, dt, A, L_data_fid):
+        nb_elec = A.shape[-2]
         grad, cost = self.grad_cost(x, sigma, proj_p1, Ks, M, M_inv, D, D_inv, dt)
-        grad = 1. / (L_data_fid/A.shape[0] + self.lamb.exp()*(1+self.eps_omega.exp())) * (1 / A.shape[0] * M_inv@torch.permute(A,(0,1,3,2))@(A@x-x_noisy) + grad) 
+        grad = 1. / (L_data_fid/nb_elec + self.lamb.exp()*(1+self.eps_omega.exp())) * (1 / nb_elec * M_inv@torch.permute(A,(0,1,3,2))@(A@x-x_noisy) + grad)
         cost = cost + (1/2)*L2_squared_torso(x, x_noisy, A, D)
         return grad, cost

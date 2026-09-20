@@ -33,6 +33,7 @@ class Base_Methods:
         gpu_id = int(device.split(":")[1])
         cp.cuda.Device(gpu_id).use()
         
+        self.tol = config.get('tol', 1e-3)
         if config['precision'] == "double":                
             self.dtype = np.float64
         else:
@@ -270,7 +271,7 @@ class Base_Methods:
             
             # Stopping criterion
             l_inf = cp.max(cp.abs(u_l-u))
-            if l_inf < 1e-3:
+            if l_inf < self.tol:
                 return u
             
             if energy and (it+1)%100 == 0:

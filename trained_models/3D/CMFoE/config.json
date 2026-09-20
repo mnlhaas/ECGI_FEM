@@ -1,6 +1,6 @@
 {
-    "dim": "2D",
-    "exp_name": "CMFoE_2D",
+    "dim": "3D",
+    "exp_name": "CMFoE",
     "l_op_params": {
         "approx": false,
         "eps_theta": -5.0,
@@ -25,7 +25,7 @@
         "convex": true,
         "denoise_init_value": 0.5,
         "eps_omega": -5.0,
-        "groupsize": 4,
+        "groupsize": 5,
         "lamb_init": 5.0,
         "loss": "L2",
         "problem": "denoise",
@@ -42,7 +42,7 @@
             "tol": 0.001
         },
         "fixed_point_solver_fw_params": {
-            "max_iter": 10000,
+            "max_iter": 20000,
             "tol": 0.0001
         }
     },
@@ -53,9 +53,9 @@
     "training_options": {
         "lr_activation": 0.001,
         "lr_conv": 0.001,
-        "lr_decay": 0.5,
+        "lr_decay": 1.0,
         "lr_mu": 0.001,
-        "n_batch_decay": 10000,
+        "n_batch_decay": 2500,
         "n_batches": 20000
     }
 }

@@ -1,6 +1,6 @@
 {
     "dim": "2D",
-    "exp_name": "CMFoE_2D",
+    "exp_name": "MFoE_2D",
     "l_op_params": {
         "approx": false,
         "eps_theta": -5.0,
@@ -22,7 +22,7 @@
         "log_dir": "trained_models"
     },
     "model_params": {
-        "convex": true,
+        "convex": false,
         "denoise_init_value": 0.5,
         "eps_omega": -5.0,
         "groupsize": 4,

@@ -20,7 +20,7 @@ This directory contains the PyTorch implementations of the **Temporal Multivaria
 
 ### 3. Baseline Methods
 
-*   **`methods.py`**: Contains GPU-accelerated (CuPy) implementations of classical regularization methods for comparison:
+*   **`base_methods.py`**: Contains GPU-accelerated (CuPy) implementations of classical regularization methods for comparison:
     *   Tikhonov (`TIK`) Regularization (Zero-order  (`zero`) and First-order (`first`)).
     *   Total Variation  (`TV`) (Isotropic (`l2`) and Anisotropic  (`l1`)).
 

@@ -11,8 +11,7 @@ import itertools
 from problems.utils_recon import Tune_Hyperparams_MFoE, Tune_Hyperparams_Base
 
 
-def main(device):
-    config_path = 'problems/config_recon.json'
+def main(device, config_path):
     config = json.load(open(config_path))
 
     exp_dir = os.path.join(config['logging_info']['log_dir'], config['logging_info']['exp_name'])
@@ -44,11 +43,12 @@ def main(device):
     
     def local_grid_search(
         hyper,
-        best_params, 
-        gamma, 
-        print_fn, 
+        best_params,
+        gamma,
+        print_fn,
         log_search=False,
-        log_scales=3
+        log_scales=3,
+        gamma_stop=1.05
     ):
         loss_errors = {}
         best_loss = float("inf")
@@ -65,7 +65,7 @@ def main(device):
             best_loss = loss_errors[best_params]
 
         # Local refinement
-        while gamma > 1.05:
+        while gamma > gamma_stop:
             grids = [[p/gamma, p, p*gamma] for p in best_params]
 
             for params in itertools.product(*grids):
@@ -100,6 +100,7 @@ def main(device):
                 best_params=(best_lamb, best_sigma),
                 gamma=gamma,
                 log_search=config['params']['log_search_coarse'],
+                gamma_stop=config['params'].get('gamma_stop', 1.05),
                 print_fn=lambda p, loss: print(f"Lambda: {p[0]:.5e}, Sigma: {p[1]:.5e}, loss: {loss:.5e}")
             )
         print(f'Best lambda: {best_lamb:.5e}, Best Sigma: {best_sigma:.5e}')
@@ -110,7 +111,12 @@ def main(device):
     elif config['regularizer'] == 'base':
         hyper = Tune_Hyperparams_Base(config, device)
 
-        best_lamb_g = best_lamb_t = best_lamb
+        final_tol = config['method'].get('tol', 1e-4)
+        tune_tol = config['method'].get('tune_tol', final_tol)
+        hyper.model.tol = tune_tol
+
+        best_lamb_g = best_lamb
+        best_lamb_t = config['params'].get('lambda_t', best_lamb)
 
         if config['tune']:
             gamma = config['params']['gamma']
@@ -120,10 +126,12 @@ def main(device):
                 best_params=(best_lamb_g, best_lamb_t),
                 gamma=gamma,
                 log_search=config['params']['log_search_coarse'],
+                gamma_stop=config['params'].get('gamma_stop', 1.05),
                 print_fn=lambda p, loss: print(f"Lambda_gamma: {p[0]:.5e}, Lambda_t: {p[1]:.5e}, loss: {loss:.5e}")
             )
         best_params = (best_lamb_g, best_lamb_t)
         print(f'Best Lambda_gamma: {best_lamb_g:.5e}, Lambda_t: {best_lamb_t:.5e}')
+        hyper.model.tol = final_tol
         loss_val_mean, loss_list, output_list, data_list, dt_list = hyper.apply(best_params)
         print(f'Validation loss: {loss_val_mean:.5e}')
         

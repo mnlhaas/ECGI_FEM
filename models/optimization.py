@@ -79,7 +79,7 @@ def AGDR(x_init, y, proj_p1, Ks, M, M_inv, D, D_inv, dt, A, L_data_fid, model, s
         idx = condition.nonzero().view(-1)
         i_mean += torch.sum(condition).item() / x.shape[0]
 
-        if torch.max(res) < tol:
+        if idx.numel() == 0 or torch.max(res) < tol:
             break
 
     model.clear_cache()

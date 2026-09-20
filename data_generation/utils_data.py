@@ -1,24 +1,263 @@
 import numpy as np
 from scipy.sparse import coo_matrix, vstack
+from scipy.spatial import cKDTree
 import pyvista as pv
 import meshio
+import pandas as pd
+from pathlib import Path
 
 from itertools import product
 import multiprocessing
 import matplotlib.pyplot as plt
 
-from skfem import Mesh, ElementTetP1, ElementTriP1, Basis, DiscreteField, Element, penalize, condense
+from skfem import Mesh, MeshTet, ElementTetP1, ElementTriP1, Basis, DiscreteField, Element, penalize, condense
 from skfem.io import from_meshio
 from skfem import BilinearForm
 from skfem.helpers import dot, grad
-from sksparse.cholmod import cholesky
+from sksparse.cholmod import cho_factor
 
 
-def normalize_points_minmax(pts):
-    pts = np.asarray(pts)
-    mins = pts.min(axis=0)
-    maxs = pts.max(axis=0)
-    return ((pts - mins) / (maxs - mins)).T
+def compute_normalization_stats(dim):
+    """Compute global, train-set-only min/max normalization stats.
+    """
+    data_dir = Path(f"data/{dim}")
+    train_files = pd.read_csv(data_dir / "data_csv" / "train.csv", header=None).to_numpy().squeeze(axis=1)
+
+    u_min, u_max = np.inf, -np.inf
+    y_min, y_max = np.inf, -np.inf
+    for fname in train_files:
+        d = np.load(data_dir / "data_functions" / fname)
+        u_min = min(u_min, d["u"].min(), d["u_fine"].min())
+        u_max = max(u_max, d["u"].max(), d["u_fine"].max())
+        y_min = min(y_min, d["y"].min())
+        y_max = max(y_max, d["y"].max())
+
+    out_path = data_dir / "data_fixed" / "normalization.npz"
+    np.savez(out_path, u_min=u_min, u_max=u_max, y_min=y_min, y_max=y_max)
+    print(f"normalization stats ({dim}): u=[{u_min:.4f},{u_max:.4f}] y=[{y_min:.4f},{y_max:.4f}] -> {out_path}", flush=True)
+    
+def farthest_point_sampling(points, n_samples, seed=42):
+    """Greedy farthest-point sampling among a discrete candidate point set."""
+    rng = np.random.default_rng(seed)
+    n = points.shape[0]
+    selected = np.empty(n_samples, dtype=int)
+    selected[0] = rng.integers(n)
+    dist = np.linalg.norm(points - points[selected[0]], axis=1)
+    for i in range(1, n_samples):
+        selected[i] = np.argmax(dist)
+        dist = np.minimum(dist, np.linalg.norm(points - points[selected[i]], axis=1))
+    return selected
+
+def build_interp_matrix(elem_idx, bary_weights, elem_node_idx, n_query, n_source):
+    """Assemble a sparse (n_query, n_source) interpolation matrix from, for each
+    query point, the index of its containing/closest element and its
+    barycentric weights over that element's nodes.
+
+    elem_idx: (n_query,) index into `elem_node_idx`'s first axis (which element
+        each query point belongs to).
+    bary_weights: (n_query, n_nodes_per_elem) barycentric weights.
+    elem_node_idx: (n_elem, n_nodes_per_elem) node indices per element (into the
+        source point array of size n_source).
+    """
+    nodes = elem_node_idx[elem_idx]  # (n_query, n_nodes_per_elem)
+    n_query_, n_npe = nodes.shape
+    rows = np.repeat(np.arange(n_query_), n_npe)
+    cols = nodes.flatten()
+    data = bary_weights.flatten()
+    return coo_matrix((data, (rows, cols)), shape=(n_query, n_source)).tocsr()
+
+
+def locate_in_tets(query_points, mesh_points, tets, k_start=16, k_max=1024, tol=1e-3):
+    """Locate each query point within a tetrahedral mesh and return barycentric
+    interpolation data.
+    """
+    query_points = np.asarray(query_points)
+    n_query = query_points.shape[0]
+    centroids = mesh_points[tets].mean(axis=1)
+    tree = cKDTree(centroids)
+
+    best_tet = np.full(n_query, -1, dtype=np.int64)
+    best_bary = np.zeros((n_query, 4))
+    best_violation = np.full(n_query, np.inf)
+
+    unresolved = np.arange(n_query)
+    k = k_start
+    while unresolved.size > 0:
+        k = min(k, tets.shape[0])
+        _, cand = tree.query(query_points[unresolved], k=k)
+        if k == 1:
+            cand = cand[:, None]
+        for j in range(cand.shape[1]):
+            tet_idx = cand[:, j]
+            verts = mesh_points[tets[tet_idx]]  # (n_unresolved, 4, 3)
+            v0 = verts[:, 0]
+            T = np.stack([verts[:, 1] - v0, verts[:, 2] - v0, verts[:, 3] - v0], axis=-1)  # (n, 3, 3)
+            rhs = query_points[unresolved] - v0
+            b123 = np.linalg.solve(T, rhs[..., None])[..., 0]  # (n, 3)
+            b0 = 1.0 - b123.sum(axis=1)
+            bary = np.concatenate([b0[:, None], b123], axis=1)
+            violation = np.clip(-bary, 0, None).max(axis=1)
+            improve = violation < best_violation[unresolved]
+            idx_glob = unresolved[improve]
+            best_tet[idx_glob] = tet_idx[improve]
+            best_bary[idx_glob] = bary[improve]
+            best_violation[idx_glob] = violation[improve]
+
+        unresolved = unresolved[best_violation[unresolved] > tol]
+        if k >= k_max or k >= tets.shape[0]:
+            break
+        k *= 4
+
+    missing_mask = best_violation > tol
+    bary = np.clip(best_bary, 0, None)
+    bary /= bary.sum(axis=1, keepdims=True)
+    return best_tet, bary, missing_mask
+
+
+def _closest_point_on_triangles(p, a, b, c):
+    """Vectorized closest-point-on-triangle (Ericson, Real-Time Collision
+    Detection). p, a, b, c: (n, 3). Returns closest (n,3), bary (n,3)."""
+    ab = b - a
+    ac = c - a
+    ap = p - a
+    d1 = np.einsum("ij,ij->i", ab, ap)
+    d2 = np.einsum("ij,ij->i", ac, ap)
+
+    bp = p - b
+    d3 = np.einsum("ij,ij->i", ab, bp)
+    d4 = np.einsum("ij,ij->i", ac, bp)
+
+    cp = p - c
+    d5 = np.einsum("ij,ij->i", ab, cp)
+    d6 = np.einsum("ij,ij->i", ac, cp)
+
+    va = d3 * d6 - d5 * d4
+    vb = d5 * d2 - d1 * d6
+    vc = d1 * d4 - d3 * d2
+
+    n = p.shape[0]
+    bary = np.zeros((n, 3))
+    closest = np.zeros((n, 3))
+    unresolved = np.ones(n, dtype=bool)
+
+    case1 = unresolved & (d1 <= 0) & (d2 <= 0)
+    bary[case1] = np.array([1.0, 0.0, 0.0])
+    closest[case1] = a[case1]
+    unresolved &= ~case1
+
+    case2 = unresolved & (d3 >= 0) & (d4 <= d3)
+    bary[case2] = np.array([0.0, 1.0, 0.0])
+    closest[case2] = b[case2]
+    unresolved &= ~case2
+
+    case3 = unresolved & (vc <= 0) & (d1 >= 0) & (d3 <= 0)
+    v = np.zeros(n)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        v[case3] = d1[case3] / (d1[case3] - d3[case3])
+    bary[case3] = np.stack([1 - v[case3], v[case3], np.zeros(case3.sum())], axis=1)
+    closest[case3] = a[case3] + v[case3, None] * ab[case3]
+    unresolved &= ~case3
+
+    case4 = unresolved & (d6 >= 0) & (d5 <= d6)
+    bary[case4] = np.array([0.0, 0.0, 1.0])
+    closest[case4] = c[case4]
+    unresolved &= ~case4
+
+    case5 = unresolved & (vb <= 0) & (d2 >= 0) & (d6 <= 0)
+    w = np.zeros(n)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        w[case5] = d2[case5] / (d2[case5] - d6[case5])
+    bary[case5] = np.stack([1 - w[case5], np.zeros(case5.sum()), w[case5]], axis=1)
+    closest[case5] = a[case5] + w[case5, None] * ac[case5]
+    unresolved &= ~case5
+
+    case6 = unresolved & (va <= 0) & ((d4 - d3) >= 0) & ((d5 - d6) >= 0)
+    w6 = np.zeros(n)
+    denom6 = (d4 - d3) + (d5 - d6)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        w6[case6] = (d4[case6] - d3[case6]) / denom6[case6]
+    bary[case6] = np.stack([np.zeros(case6.sum()), 1 - w6[case6], w6[case6]], axis=1)
+    closest[case6] = b[case6] + w6[case6, None] * (c[case6] - b[case6])
+    unresolved &= ~case6
+
+    # interior
+    denom = va + vb + vc
+    with np.errstate(invalid="ignore", divide="ignore"):
+        v = np.where(unresolved, vb / np.where(denom == 0, 1, denom), 0.0)
+        w = np.where(unresolved, vc / np.where(denom == 0, 1, denom), 0.0)
+    bary[unresolved] = np.stack([1 - v[unresolved] - w[unresolved], v[unresolved], w[unresolved]], axis=1)
+    closest[unresolved] = a[unresolved] + v[unresolved, None] * ab[unresolved] + w[unresolved, None] * ac[unresolved]
+
+    return closest, bary
+
+
+def locate_on_triangles(query_points, surf_points, tris, k=12):
+    """For each query point, find the closest point on a triangulated surface
+    (embedded in 3D) among the `k` nearest candidate triangles (by centroid),
+    and return barycentric interpolation data for that closest point.
+    """
+    query_points = np.asarray(query_points)
+    n_query = query_points.shape[0]
+    centroids = surf_points[tris].mean(axis=1)
+    tree = cKDTree(centroids)
+    k = min(k, tris.shape[0])
+    _, cand = tree.query(query_points, k=k)
+    if k == 1:
+        cand = cand[:, None]
+
+    best_tri = np.full(n_query, -1, dtype=np.int64)
+    best_bary = np.zeros((n_query, 3))
+    best_dist = np.full(n_query, np.inf)
+
+    for j in range(cand.shape[1]):
+        tri_idx = cand[:, j]
+        verts = surf_points[tris[tri_idx]]  # (n_query, 3, 3)
+        closest, bary = _closest_point_on_triangles(
+            query_points, verts[:, 0], verts[:, 1], verts[:, 2]
+        )
+        dist = np.linalg.norm(query_points - closest, axis=1)
+        improve = dist < best_dist
+        best_tri[improve] = tri_idx[improve]
+        best_bary[improve] = bary[improve]
+        best_dist[improve] = dist[improve]
+
+    return best_tri, best_bary, best_dist
+
+
+def remesh_torso_coarser(outer_surface, inner_surface, mode="region",region_seed_point=None, torso_seed_point=None, max_volume=None):
+    """Build a deliberately coarser, independent volumetric tet mesh of the
+    torso"""
+    import tetgen
+
+    merged = pv.merge([outer_surface, inner_surface])
+    tgen = tetgen.TetGen(merged)
+    quality = max_volume is not None
+
+    if mode == "region":
+        tgen.add_region(1, list(region_seed_point), max_vol=(max_volume or 0.0))
+        tgen.add_region(2, list(torso_seed_point), max_vol=(max_volume or 0.0))
+        nodes, elems, attrib, _ = tgen.tetrahedralize(
+            plc=True, nobisect=True, quality=quality, regionattrib=True, varvolume=quality, verbose=0
+        )
+        attrib = attrib.flatten()
+        centroids = nodes[elems].mean(axis=1)
+        nearest_elem = np.argmin(np.linalg.norm(centroids - np.asarray(region_seed_point), axis=1))
+        interior_marker = attrib[nearest_elem]
+        interior_elem_idx = np.where(attrib == interior_marker)[0]
+        mesh = MeshTet(nodes.T, elems.T, _subdomains={"interior": interior_elem_idx})
+    elif mode == "hole":
+        tgen.add_hole(list(region_seed_point))
+        if quality:
+            result = tgen.tetrahedralize(switches=f"pYQa{max_volume}")
+        else:
+            result = tgen.tetrahedralize(plc=True, nobisect=True, quality=False, verbose=0)
+        nodes, elems = result[0], result[1]
+        mesh = MeshTet(nodes.T, elems.T)
+    else:
+        raise ValueError(f"mode must be 'region' or 'hole', got {mode!r}")
+
+    return mesh
+
 
 def convert_mesh(mesh : pv.UnstructuredGrid):
     tris = mesh.cells_dict[pv.cell.CellType.TRIANGLE]
@@ -130,7 +369,7 @@ def assemble_transfer_op(torso_mesh, elec_inds, epi_inds, cond_tensors, d, heart
     A_reduced = A_reduced.tocsc()
 
     #Avoids building the whole inverse operator
-    A_chol = cholesky(A_reduced, use_long=True)
+    A_chol = cho_factor(A_reduced)
 
 
     elec_reduced_inds = np.array([np.where(e_i == I)[0][0] for e_i in elec_inds.flatten()])
@@ -141,7 +380,7 @@ def assemble_transfer_op(torso_mesh, elec_inds, epi_inds, cond_tensors, d, heart
         assert i in I
         rhs[:] = 0.
         rhs[np.where(i == I)[0]] = 1. / pen_eps
-        transfer_op.append(A_chol(rhs)[elec_reduced_inds])
+        transfer_op.append(A_chol.solve(rhs)[elec_reduced_inds])
 
     transfer_op = np.stack(transfer_op, axis=1)
     return transfer_op
@@ -167,20 +406,63 @@ def quadrature_matrix_all_electrodes(elec_array, torso):
     
     return matrix
 
+def assemble_electrode_patches_3d(points, boundary_facets, facets, elec_inds):
+    """Assemble electrode patches around the electrode nodes and compute averaged integral of those
+    """
+    from scipy.sparse import lil_matrix
+
+    tri_nodes = facets[:, boundary_facets].T  # (n_boundary_tris, 3)
+    tri_pts = points[tri_nodes]  # (n_boundary_tris, 3, 3)
+    e1 = tri_pts[:, 1] - tri_pts[:, 0]
+    e2 = tri_pts[:, 2] - tri_pts[:, 0]
+    tri_area = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
+
+    node_to_tris = {}
+    for t_idx, tri in enumerate(tri_nodes):
+        for n in tri:
+            node_to_tris.setdefault(n, []).append(t_idx)
+
+    all_patch_nodes = set()
+    elec_nodes, elec_weights = [], []
+    for center in elec_inds:
+        node_weight = {}
+        for t_idx in node_to_tris.get(center, []):
+            tri, area = tri_nodes[t_idx], tri_area[t_idx]
+            for n in tri:
+                node_weight[n] = node_weight.get(n, 0.0) + area / 3.0
+        total = sum(node_weight.values())
+
+        nodes = list(node_weight.keys())
+        weights = [node_weight[n] / total for n in nodes]
+        elec_nodes.append(nodes)
+        elec_weights.append(weights)
+        all_patch_nodes.update(nodes)
+
+    patch_node_inds = np.array(sorted(all_patch_nodes))
+    node_pos = {n: i for i, n in enumerate(patch_node_inds)}
+
+    quad_matrix = lil_matrix((len(elec_inds), len(patch_node_inds)))
+    for i, (nodes, weights) in enumerate(zip(elec_nodes, elec_weights)):
+        for n, w in zip(nodes, weights):
+            quad_matrix[i, node_pos[n]] = w
+
+    return patch_node_inds, quad_matrix.tocsr()
+
 def build_p0_to_p1_space(fbasis, epi_inds):
     """Assemble matrix to map elementwise functions to nodewise functions."""
     mass = fbasis.dx.flatten()
-    dofs_per_elem = fbasis.element_dofs.shape[0]
-    
-    rows = []
-    cols = []
+    facet_nodes = fbasis.mesh.facets[:, fbasis.find]  # (dofs_per_facet, nelems)
 
-    cols = np.tile(np.arange(fbasis.nelems), [dofs_per_elem-1, 1]).T.flatten()
-    rows = fbasis.element_dofs.T.flatten()
-    rows_filtered = rows[np.isin(rows, epi_inds)]
-    
-    grad_ops = coo_matrix((mass, (rows_filtered, cols)), shape=[len(epi_inds), fbasis.nelems]).tocsr()
-        
+    cols = np.repeat(np.arange(fbasis.nelems), facet_nodes.shape[0])
+    rows_global = facet_nodes.T.flatten()
+
+    epi_pos = -np.ones(fbasis.mesh.p.shape[1], dtype=np.int64)
+    epi_pos[epi_inds] = np.arange(len(epi_inds))
+    rows = epi_pos[rows_global]
+    assert (rows >= 0).all(), "facet basis contains nodes outside epi_inds"
+
+    grad_ops = coo_matrix((mass, (rows, cols)), shape=[len(epi_inds), fbasis.nelems]).tocsr()
+
     return grad_ops
 
 def assemble_interpol_op_space(fbasis) :
@@ -223,20 +505,4 @@ def plot_circular_space_time_cylinder(vals, ax, t_all, angle, epi_order, cmap, v
         fig.gca().axes.get_yaxis().set_visible(False)
         fig.gca().axes.get_xaxis().set_visible(False)
         fig.savefig(save + '.png', format='png', dpi=300, transparent = True, bbox_inches = 'tight', pad_inches = 0)
-
-def plot_space_time_comparison(vals, gt, t_all, angle, epi_order, cmap, vmin = 0, vmax = 1, ax_label = True):
-    """Helper function to compare reconstruction with ground truth."""
-    diff = vals - gt
-    fig, axes = plt.subplots(nrows=1, ncols=4)
-    plot_circular_space_time_cylinder(vals, axes[0], t_all, angle, epi_order, cmap, vmin, vmax, ax_label)
-    axes[0].set_title("Reconstruction")
-    plot_circular_space_time_cylinder(diff, axes[1], t_all, angle, epi_order, cmap, vmin, vmax, ax_label)
-    axes[1].set_title(f"Diff")
-    plot_circular_space_time_cylinder(gt, axes[2], t_all, angle, epi_order, vmin, cmap, vmax, ax_label)
-    axes[2].set_title("GT")
-    axes[3].hist(np.abs(diff).flatten(), bins=100, density=True)
-    axes[3].set_title("Error distribution")
-
-    fig.set_size_inches((18, 7))
-    return fig, axes
 

@@ -7,9 +7,8 @@ import argparse
 from training.trainer import Trainer
 
 
-def main(device):
+def main(device, config_path):
     # Set up directories for saving results
-    config_path = 'training/config_train.json'
     config = json.load(open(config_path))
 
     exp_dir = os.path.join(config['logging_info']['log_dir'], config['exp_name'])
@@ -24,7 +23,6 @@ def main(device):
     torch.cuda.manual_seed_all(seed)
     
     trainer_inst = Trainer(config, device)
-   
     trainer_inst.train()
 
 
@@ -38,7 +36,14 @@ if __name__ == '__main__':
         default="cpu",
         help="Device (e.g., cpu or cuda:n)"
     )
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default="training/config_train.json",
+        help="Path to training config json"
+    )
 
     args = parser.parse_args()
 
-    main(args.device)
+    main(args.device, args.config)

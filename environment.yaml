@@ -16,7 +16,8 @@ dependencies:
   - tensorboard
   - scikit-sparse
   - vtk
-  - ipykernel  
+  - h5py
+  - ipykernel
   - pip
   - pip:
       - scikit-fem
@@ -24,3 +25,4 @@ dependencies:
       - pyvista
       - cupy-cuda11x
       - torchdeq
+      - tetgen

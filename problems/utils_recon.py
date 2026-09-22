@@ -61,6 +61,12 @@ class Tune_Hyperparams_MFoE:
         self.proj_p1     = to_tensor(data['proj_p1']).unsqueeze(0).unsqueeze(0)
         self.L_data_fid  = torch.sqrt(to_tensor(data['L_data_fid']))
 
+        self.M_eval = self.M
+        if config.get('dim', '2D') == '3D':
+            cap_mask = np.load(f"data/meshes/{config.get('dim', '2D')}/cap_mask.npy")
+            mask = to_tensor((~cap_mask).astype(np.float64))
+            self.M_eval = self.M * mask.view(1, 1, -1, 1) * mask.view(1, 1, 1, -1)
+
         if config['method']['problem'] == "inverse":
             data_obs = np.load(f"{self.data_dir}/data_fixed/fixed_data_obs.npz")
             self.A_obs = to_tensor(data_obs['A_obs']).unsqueeze(0).unsqueeze(0)
@@ -112,7 +118,7 @@ class Tune_Hyperparams_MFoE:
 
             tol = self.config['method'].get('tune_tol', self.config['method'].get('tol', 1e-4))
             output = AGDR(data_init, noisy_data, self.proj_p1, self.Ks, self.M, self.M_inv, D, D_inv, dt, self.A, self.L_data_fid, self.model, sigma * torch.ones(1, 1, 1, 1, device=self.device, dtype=self.dtype), self.max_iter, tol)[0]
-            loss = (self.criterion(output, data, self.M, D, self.Ks, Kt, self.dx))
+            loss = (self.criterion(output, data, self.M_eval, D, self.Ks, Kt, self.dx))
             loss_test += loss.cpu().item()
 
         loss_test_mean = loss_test/len(self.val_dataloader)
@@ -176,7 +182,7 @@ class Tune_Hyperparams_MFoE:
             if self.config['save_gt_data']:
                 data_list.append(data.squeeze().cpu().numpy())
                 dt_list.append(dt.item())
-            loss = (self.criterion(output, data, self.M, D, self.Ks, Kt, self.dx, dt))
+            loss = (self.criterion(output, data, self.M_eval, D, self.Ks, Kt, self.dx, dt))
             loss_val = loss.cpu().item()
             loss_test += loss_val
             loss_list.append(loss_val)
@@ -226,6 +232,12 @@ class Tune_Hyperparams_Base:
             self.M        = to_cp_csr(np.array(data['M']))
         else:
             self.M_weight = splu(self.M)
+
+        self.M_eval = self.M
+        if config.get('dim', '2D') == '3D':
+            cap_mask = np.load(f"data/meshes/{config.get('dim', '2D')}/cap_mask.npy")
+            mask = diags(cp.asarray((~cap_mask).astype(self.dtype)))
+            self.M_eval = mask @ self.M @ mask
 
         self.dx               = to_cp(data['dx'])
         self.Ks               = to_cp_csr(data['Ks'])
@@ -283,8 +295,8 @@ class Tune_Hyperparams_Base:
             data_init = cp.zeros_like(data)
             output = self.model.optim(data_init, lamb, noisy_data, self.Ks, Kt, self.A, self.A_pinv , self.N_0, self.d, self.dx, dt, self.M, self.M_weight, D, D_weight, self.dx_trap, dt_trap, self.int_op_space, energy=False)    
 
-            loss = (self.criterion(output, data, self.M, D, self.Ks, Kt, self.dx, dt))
-            loss_test += loss.item()       
+            loss = (self.criterion(output, data, self.M_eval, D, self.Ks, Kt, self.dx, dt))
+            loss_test += loss.item()
                                   
         loss_test_mean = loss_test/len(self.val_dataloader)
         
@@ -343,8 +355,8 @@ class Tune_Hyperparams_Base:
                 data_list.append(to_np(data))
                 dt_list.append(dt)
             
-            loss = (self.criterion(output, data, self.M, D, self.Ks, Kt, self.dx, dt))
-            loss_val += loss.item()    
+            loss = (self.criterion(output, data, self.M_eval, D, self.Ks, Kt, self.dx, dt))
+            loss_val += loss.item()
             loss_list.append(loss.item())   
                                   
         loss_list = np.array(loss_list)

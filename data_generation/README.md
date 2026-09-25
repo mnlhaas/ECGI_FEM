@@ -23,6 +23,9 @@ There are two independent generation scripts, sharing common FEM/mesh utilities 
 
 *   **`gen_data_2D.py`** (class `GenData2D`): 2D torso/heart cross-section, using a fixed-refinement simulation mesh (`data/meshes/2D/`). Configured via `config_data_2D.json`.
 *   **`gen_data_3D.py`** (class `GenData3D`): 3D biventricular heart with rule-based (LDRB) fiber directions, embedded in a full 3D torso (`data/meshes/3D/`). Configured via `config_data_3D.json`. Also draws stimulation from three fixed anatomical pacing sites (LV, RV, APEX) instead of a random location, and places electrodes on the torso surface via farthest-point sampling instead of a fixed layout.
+<p align="center">
+  <img src="figures/heart_body_3D.png" alt="3D biventricular heart and torso model with electrodes"/>
+</p>
 
 Both scripts perform the same four steps:
 1.  **Fixed Operators** (`gen_fixed_data`): Precomputes and saves the time-independent FEM matrices used by the reconstruction problem (spatial mass matrix `M`, spatial gradient `Ks`, forward/observation operators `A`/`A_obs`, projection `proj_p1`), and caches expensive one-time results on disk so reruns skip already-computed operators.

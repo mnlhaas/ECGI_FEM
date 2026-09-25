@@ -3,6 +3,7 @@
 The repository contains the implementation of **Learned Finite Element-based Regularization of the Inverse Problem in Electrocardiographic Imaging** designed for solving space-time inverse problems describen in [Haas et al. (2026)](https://arxiv.org/abs/2602.07466), with a specific application to **Electrocardiographic Imaging (ECGI)** on a torso-heart model with heart domain $\Omega_H$, torso domain $\Omega_0$ including lungs, epicardium $\Gamma_H$, torso boundary $\Gamma$ and body surface electrodes $\Sigma$. Both a 2D torso-heart cross-section and a full 3D biventricular model are supported.
 <p align="center">
   <img src="data_generation/figures/torso.png" alt="Torso-heart-model with lungs and electrodes" width="400"/>
+  <img src="data_generation/figures/heart_body_3D.png" alt="3D biventricular heart and torso model with electrodes" width="400"/>
 </p>
 
 The project includes a complete pipeline for:
